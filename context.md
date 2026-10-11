@@ -20,7 +20,7 @@ Python stdio MCP server, plus a `facebook-marketplace` CLI that calls the same c
 - `src/facebook_marketplace_mcp/queries.py` — location `doc_id` and GraphQL variables
 - `src/facebook_marketplace_mcp/parser.py` — search HTML and listing page parsing
 - `src/facebook_marketplace_mcp/monitors.py` — `~/.fb-marketplace/monitors.json`. Each monitor stores a `queries` list, such as `crv 2023` and `cr-v 2023`, and the last 500 seen ids. Adding the same name again replaces that list.
-- `src/facebook_marketplace_mcp/history.py` — slug, price catalog, and `runs/<query>/<slug>.json`. A combined search is one folder, such as `runs/crv 2023, cr-v 2023/`. Each item keeps `created_at`, `updated_at` from the latest search that found it, the original price, and a later lower price. `<slug>.png` is the one listing photo. `facebook-marketplace serve` hosts `runs/` so `index.html` can browse those folders.
+- `src/facebook_marketplace_mcp/history.py` — slug, price catalog, and `runs/<query>/<slug>.json`. A combined search is one folder, such as `runs/crv 2023, cr-v 2023/`. Each item keeps `created_at`, `updated_at` from the latest search that found it, the original price, and a later lower price. `image` is the Facebook photo URL, not a saved file; an expired URL (`oe=`) is fetched again. `facebook-marketplace serve` hosts `runs/` so `index.html` can browse those folders.
 - `src/facebook_marketplace_mcp/notify.py` — one Slack message when a monitor check finds new listings. Reads `SLACK_BOT_TOKEN` and `SLACK_CHANNEL` from the shell or `server/.env`. Empty checks stay quiet.
 - `src/facebook_marketplace_mcp/rate_limit.py` — 3 requests/minute with jitter
 

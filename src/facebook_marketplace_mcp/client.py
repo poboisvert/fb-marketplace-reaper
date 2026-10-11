@@ -11,7 +11,7 @@ from facebook_marketplace_mcp.auth import (
     extract_chrome_cookies,
     get_cookie_value,
 )
-from facebook_marketplace_mcp.history import record_run, saved_photo_ids
+from facebook_marketplace_mcp.history import record_run, saved_photo_urls
 from facebook_marketplace_mcp.provinces import in_province, resolve_province, same_place
 from facebook_marketplace_mcp.parser import (
     MarketplaceListing,
@@ -312,14 +312,15 @@ class FacebookClient:
 
         listings = _merge_listings(groups)
         run_query = ", ".join(names)
-        keep_photos = saved_photo_ids(listings, query=run_query)
+        saved_photos = saved_photo_urls(listings, query=run_query)
         for listing in listings:
-            if listing.id in keep_photos:
+            if listing.id in saved_photos:
+                listing.image_url = saved_photos[listing.id]
                 continue
             photo = await self.listing_page_photo(session.cookie_header, listing.id)
             if photo:
                 listing.image_url = photo
-        record_run(listings, query=run_query, keep_photos=keep_photos)
+        record_run(listings, query=run_query)
         return SearchResult(listings=listings, has_next_page=has_next_page)
 
     async def _fetch_search_html(

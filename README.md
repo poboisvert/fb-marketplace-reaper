@@ -77,7 +77,7 @@ Each name returns up to `--limit` listings. While Facebook reports another page,
 | `--category` | none | Marketplace category ID |
 | `--latitude` | 0 | Stored only; not sent as the search center |
 | `--longitude` | 0 | Stored only; not sent as the search center |
-| `--radius-km` | 50 | Stored only, unless `--province` is set |
+| `--radius-km` | 50 | Stored only. `--province` uses the province's own radius |
 | `--province` | none | Canadian province or territory (`quebec`, `QC`). Searches that province and drops listings from outside it |
 
 An empty result prints `No listings found` and exits 0. A Keychain, cookie, or HTTP failure prints to stderr and exits 1.
@@ -89,7 +89,7 @@ server/runs/cr-v 2023/<slug>.json
 server/runs/crv 2023, cr-v 2023/<slug>.json
 ```
 
-Each item stores `created_at`, `updated_at`, `original_price`, and `price`. The photo shown when the listing link is opened is saved once, as `<slug>.png`, and that same file is the thumbnail and the opened image in `runs/index.html`. The first search sets `created_at` and `updated_at` to the same time, and `original_price` to the price found then. A later search that finds the listing again sets `updated_at` to that time. A lower price keeps `original_price`, writes the lower price into `price`, and sets `price_dropped`.
+Each item stores `created_at`, `updated_at`, `original_price`, and `price`. `image` is the Facebook URL of the photo shown when the listing link is opened. No image file is saved. That URL is the thumbnail and the opened image in `runs/index.html`. Facebook photo URLs expire, so a search fetches a fresh one when the saved URL expires within a day. An older item that still has `<slug>.png` keeps showing that file until a search finds it again. The first search sets `created_at` and `updated_at` to the same time, and `original_price` to the price found then. A later search that finds the listing again sets `updated_at` to that time. A lower price keeps `original_price`, writes the lower price into `price`, and sets `price_dropped`.
 
 Open the saved listings with `facebook-marketplace serve`, then go to `http://127.0.0.1:8767/index.html`. The page reads each item JSON, and checks again every 15 seconds. A search updates `runs/index.json`, the list of those files. `listing` and `monitor check` update the same item file.
 
@@ -139,7 +139,39 @@ Save a search in `~/.fb-marketplace/monitors.json` so later checks can show only
 facebook-marketplace monitor add crv --query "crv 2023" --query "cr-v 2023" --min-price 20000 --max-price 26000
 ```
 
-This saves a monitor named `crv` that tracks both `crv 2023` and `cr-v 2023`, then combines the rows. `--query` is required and can be repeated. Running `add` again with the same name updates those keywords and price bounds. `--limit` defaults to 250. `--category`, `--latitude`, `--longitude`, and `--radius-km` match `search`. The command prints the monitor name, id, and each keyword. It does not search yet.
+This saves a monitor named `crv` that tracks both `crv 2023` and `cr-v 2023`, then combines the rows. The command prints the monitor name, id, and each keyword. It does not search yet.
+
+Running `add` again with the same name replaces every setting. Pass all the flags again, because a flag you leave out goes back to its default. Seen ids and the last check time are kept.
+
+```bash
+facebook-marketplace monitor add "hrv, hr-v" --query hrv --query hr-v --min-price 10000 --max-price 25000 --province quebec
+```
+
+#### Monitor parameters
+
+| Flag | `monitors.json` key | Default | What it does |
+|------|---------------------|---------|--------------|
+| `name` (positional) | `name` | required | The monitor's name. `monitor check`, `monitor delete`, and the Slack message use it. It is not searched. |
+| `--query` | `queries`, `query` | required | A search name. Repeat the flag, or separate names with commas. Each name is its own Marketplace search. Results are combined by listing id and saved in one folder, `runs/<names joined by ", ">/`. |
+| `--min-price` | `minPrice` | none | Lowest price in dollars. Facebook filters on it. |
+| `--max-price` | `maxPrice` | none | Highest price in dollars. Facebook filters on it. |
+| `--province` | `province` | none | Canadian province or territory, such as `quebec` or `QC`. The search starts from that province's Marketplace place with a fixed radius large enough to cover the populated province (650 km for Quebec), then drops listings located outside the province. Without it, the search uses the Marketplace city set on the logged-in Chrome account. |
+| `--limit` | `limit` | 250 | Most listings kept per search name. Each name reads at most 10 feed pages, so it can stop before the limit. A higher limit covers more live listings, so `updated_at` stays current, but each new listing costs one more request at 3 per minute. |
+| `--category` | `category` | none | Marketplace category id. Listings from other categories are dropped after the search. |
+| `--radius-km` | `radiusKm` | 50 | Saved but not used. With `--province`, the province's own radius is used instead. Without it, Facebook uses the account's saved Marketplace radius. |
+| `--latitude` | `latitude` | 0 | Saved but not used as the search center. |
+| `--longitude` | `longitude` | 0 | Saved but not used as the search center. |
+| `--chrome-profile` | — | `CHROME_PROFILE` or `Default` | Chrome profile that supplies the Facebook cookies for this command. It is not saved on the monitor. |
+| `--json` | — | off | Print the saved monitor as JSON. |
+
+The file also keeps fields that `add` does not set:
+
+| Key | Meaning |
+|-----|---------|
+| `id` | Random id created with the monitor |
+| `seenIds` | Listing ids already reported. `monitor check` reports only ids not in this list. Only the last 500 are kept. If one check returns more than 500 listings, older ids drop off and can come back as new |
+| `createdAt` | When the monitor was first saved |
+| `lastChecked` | When `monitor check` last ran it |
 
 ### `monitor check`
 
@@ -168,6 +200,11 @@ The user crontab runs it at 9:00 in the Mac’s local timezone:
 
 ```cron
 0 9 * * * /Users/poboisvert/Desktop/GIT/mrk-agent/server/scripts/daily-monitors.sh
+```
+
+
+```
+sh ./scripts/daily-monitors.sh      
 ```
 
 The Mac has to be on and logged in at that time. The check reads Chrome’s Facebook cookies from the Keychain, and cron does not wake a sleeping Mac. Output is appended to `~/Library/Logs/fb-marketplace-daily.log`.
@@ -261,12 +298,15 @@ Save a search as a monitor. Commas in `query` are separate keywords, stored on t
 |-----------|------|----------|-------------|
 | `name` | string | yes | Monitor name |
 | `query` | string | yes | One or more names, separated by commas. Checked and combined the same way as `search_listings` |
-| `latitude` | number | yes | Search center lat |
-| `longitude` | number | yes | Search center lng |
-| `radius_km` | number | no | Radius (default: 50) |
-| `min_price` | number | no | Min price |
-| `max_price` | number | no | Max price |
-| `province` | string | no | Canadian province or territory (`quebec`, `QC`) |
+| `latitude` | number | yes | Saved only; not used as the search center |
+| `longitude` | number | yes | Saved only; not used as the search center |
+| `radius_km` | number | no | Saved only (default: 50). A province uses its own radius |
+| `min_price` | number | no | Min price in dollars |
+| `max_price` | number | no | Max price in dollars |
+| `category` | string | no | Category ID. Other categories are dropped |
+| `province` | string | no | Canadian province or territory (`quebec`, `QC`). Searches the whole province and drops listings outside it |
+
+The tool always saves `limit` 250. See [Monitor parameters](#monitor-parameters) for what each saved value does.
 
 ### `check_monitors`
 Check monitors for new listings since last check.

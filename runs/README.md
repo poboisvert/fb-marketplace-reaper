@@ -27,4 +27,4 @@ Each search name is its own folder. Several names in one search share one folder
 | File | Contents |
 |------|----------|
 | `<slug>.json` | Title, price, original price, place, seller, URL, `created_at`, `updated_at` |
-| `<slug>.png` | The one listing photo, used as the thumbnail and the opened image |
+| `<slug>.png` | Older items only. New items store the Facebook photo URL in `image` instead |
