@@ -74,7 +74,7 @@ def params_from_dict(data: dict) -> SearchParams:
         min_price=data.get("minPrice", data.get("min_price")),
         max_price=data.get("maxPrice", data.get("max_price")),
         category=data.get("category"),
-        limit=data.get("limit", 24),
+        limit=data.get("limit", 250),
         province=data.get("province"),
     )
 

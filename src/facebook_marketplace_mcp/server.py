@@ -185,7 +185,7 @@ async def monitor_search(
                 min_price=min_price,
                 max_price=max_price,
                 category=category,
-                limit=24,
+                limit=250,
                 province=province,
             ),
         )

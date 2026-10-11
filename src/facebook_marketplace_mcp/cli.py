@@ -71,7 +71,7 @@ def main(argv: list[str] | None = None) -> None:
     )
     add.add_argument("--min-price", type=float)
     add.add_argument("--max-price", type=float)
-    add.add_argument("--limit", type=int, default=24)
+    add.add_argument("--limit", type=int, default=250)
     add.add_argument("--category")
     add.add_argument("--latitude", type=float, default=0)
     add.add_argument("--longitude", type=float, default=0)

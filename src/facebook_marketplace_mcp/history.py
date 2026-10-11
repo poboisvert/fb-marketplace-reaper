@@ -56,14 +56,35 @@ def query_dir_name(query: str) -> str:
     return cleaned
 
 
-def record_run(listings: list[MarketplaceListing], query: str = "") -> Path:
+def saved_photo_ids(listings: list[MarketplaceListing], query: str = "") -> set[str]:
+    """Ids whose ``<slug>.png`` is already saved, so the page photo need not be fetched again."""
+    catalog = _load_catalog()
+    found: set[str] = set()
+    for listing in listings:
+        entry = catalog.get(listing.id) if isinstance(catalog.get(listing.id), dict) else None
+        if entry is None:
+            continue
+        item_query = query.strip() or entry.get("query") or listing.title or "listing"
+        slug = entry.get("slug") or listing_slug(listing.title, listing.id)
+        if (RUNS_DIR / query_dir_name(item_query) / f"{slug}.png").exists():
+            found.add(listing.id)
+    return found
+
+
+def record_run(
+    listings: list[MarketplaceListing],
+    query: str = "",
+    keep_photos: set[str] | None = None,
+) -> Path:
     """Save listings under ``runs/<query>/<slug>.json``.
 
     The first time a listing is seen, ``created_at`` and ``original_price`` are
     set and ``updated_at`` matches ``created_at``. A later search that finds the
     listing again sets ``updated_at`` to that time. A lower price keeps the
-    original price and stores the lower price.
+    original price and stores the lower price. Ids in ``keep_photos`` keep their
+    saved photo instead of the search card thumbnail.
     """
+    keep_photos = keep_photos or set()
     migrate_legacy_date_runs()
     seen_at = datetime.now(timezone.utc).isoformat()
     catalog = _load_catalog()
@@ -115,7 +136,7 @@ def record_run(listings: list[MarketplaceListing], query: str = "") -> Path:
             "price": listing.price,
             "amount": amount,
             "price_dropped": dropped,
-            "image": _save_listing_image(folder, slug, listing.image_url),
+            "image": _save_listing_image(folder, slug, "" if listing.id in keep_photos else listing.image_url),
         }
         (folder / f"{slug}-page.png").unlink(missing_ok=True)
         _write_item(folder / slug, saved)

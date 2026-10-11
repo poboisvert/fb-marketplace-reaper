@@ -139,7 +139,7 @@ Save a search in `~/.fb-marketplace/monitors.json` so later checks can show only
 facebook-marketplace monitor add crv --query "crv 2023" --query "cr-v 2023" --min-price 20000 --max-price 26000
 ```
 
-This saves a monitor named `crv` that tracks both `crv 2023` and `cr-v 2023`, then combines the rows. `--query` is required and can be repeated. Running `add` again with the same name updates those keywords and price bounds. `--limit` defaults to 24. `--category`, `--latitude`, `--longitude`, and `--radius-km` match `search`. The command prints the monitor name, id, and each keyword. It does not search yet.
+This saves a monitor named `crv` that tracks both `crv 2023` and `cr-v 2023`, then combines the rows. `--query` is required and can be repeated. Running `add` again with the same name updates those keywords and price bounds. `--limit` defaults to 250. `--category`, `--latitude`, `--longitude`, and `--radius-km` match `search`. The command prints the monitor name, id, and each keyword. It does not search yet.
 
 ### `monitor check`
 
@@ -153,6 +153,7 @@ Checks every monitor. Pass a name to check one:
 
 ```bash
 facebook-marketplace monitor check crv
+facebook-marketplace monitor check "hrv, hr-v"
 ```
 
 Each block starts with `<name>: <count> new`, then the same columns as `search`. A missing name, or no monitors at all, exits 1.

@@ -19,7 +19,15 @@
   main { min-width: 0; }
   .summary { margin: 4px 8px 12px; color: var(--muted); font-size: 13px; }
   .fresh { margin: 0 0 18px; padding: 14px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); }
-  .fresh h2 { margin: 0 8px 12px; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .fresh h2, .trend h2 { margin: 0 8px 12px; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .trend { margin: 0 0 18px; padding: 14px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); }
+  .trend svg { display: block; width: 100%; height: auto; }
+  .trend .axis { fill: var(--muted); font-size: 11px; }
+  .trend .grid { stroke: var(--line); }
+  .trend .dot { fill: #a8a29e; fill-opacity: 0.55; }
+  .trend .line { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
+  .trend .median { fill: var(--ink); }
+  .trend .legend { margin: 6px 8px 0; color: var(--muted); font-size: 12px; }
   .list { display: flex; flex-direction: column; gap: 10px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; box-shadow: 0 1px 2px rgba(28,25,23,0.04); }
   .card.repriced { border: 2px solid #15803d; }
@@ -66,6 +74,11 @@
   <nav id="dates"></nav>
   <main>
     <div id="summary" class="summary">Loading listings…</div>
+    <section id="trend" class="trend" hidden>
+      <h2>Original price trend</h2>
+      <svg id="trend-chart" viewBox="0 0 720 220" role="img" aria-label="Original price by listing date"></svg>
+      <div id="trend-legend" class="legend"></div>
+    </section>
     <section id="fresh" class="fresh" hidden>
       <h2>New</h2>
       <div id="fresh-list" class="list"></div>
@@ -79,6 +92,10 @@ const listEl = document.getElementById("list");
 const freshEl = document.getElementById("fresh");
 const freshListEl = document.getElementById("fresh-list");
 const summaryEl = document.getElementById("summary");
+const trendEl = document.getElementById("trend");
+const trendChartEl = document.getElementById("trend-chart");
+const trendLegendEl = document.getElementById("trend-legend");
+const money = new Intl.NumberFormat(undefined, { style: "currency", currency: "CAD", maximumFractionDigits: 0 });
 let runs = {};
 let selected = "";
 let openSlug = "";
@@ -155,8 +172,88 @@ function renderItems() {
   summaryEl.textContent = selected
     ? items.length + " listing" + (items.length === 1 ? "" : "s") + " in " + selected
     : "No searches yet.";
+  renderTrend(items);
   for (const item of freshItems) freshListEl.append(buildCard(item));
   for (const item of olderItems) listEl.append(buildCard(item));
+}
+
+function dayKey(value) {
+  const date = new Date(value || "");
+  if (Number.isNaN(date.getTime())) return "";
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return date.getFullYear() + "-" + month + "-" + day;
+}
+
+function originalAmount(item) {
+  const amount = Number(item.original_amount ?? item.amount);
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
+function median(values) {
+  const sorted = values.slice().sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function svg(tag, attrs, text) {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [name, value] of Object.entries(attrs)) node.setAttribute(name, value);
+  if (text) node.textContent = text;
+  return node;
+}
+
+function renderTrend(items) {
+  trendChartEl.replaceChildren();
+  const points = items
+    .map((item) => ({ day: dayKey(item.created_at), amount: originalAmount(item), item }))
+    .filter((point) => point.day && point.amount);
+  trendEl.hidden = points.length === 0;
+  if (!points.length) return;
+
+  const days = [...new Set(points.map((point) => point.day))].sort();
+  const medians = days.map((day) => median(points.filter((point) => point.day === day).map((point) => point.amount)));
+  const amounts = points.map((point) => point.amount);
+  let low = Math.min(...amounts);
+  let high = Math.max(...amounts);
+  if (low === high) { low -= 1000; high += 1000; }
+  low = Math.floor(low / 1000) * 1000;
+  high = Math.ceil(high / 1000) * 1000;
+
+  const width = 720, height = 220, left = 72, right = 24, top = 12, bottom = 32;
+  const times = days.map((day) => new Date(day + "T00:00").getTime());
+  const first = times[0], last = times[times.length - 1];
+  const x = (index) => first === last ? left + (width - left - right) / 2 : left + (times[index] - first) * (width - left - right) / (last - first);
+  const y = (amount) => top + (high - amount) * (height - top - bottom) / (high - low);
+
+  for (let tick = 0; tick <= 4; tick++) {
+    const amount = low + (high - low) * tick / 4;
+    trendChartEl.append(
+      svg("line", { class: "grid", x1: left, x2: width - right, y1: y(amount), y2: y(amount) }),
+      svg("text", { class: "axis", x: left - 8, y: y(amount) + 4, "text-anchor": "end" }, money.format(amount)),
+    );
+  }
+  const step = Math.ceil(days.length / 8);
+  days.forEach((day, index) => {
+    if (index % step && index !== days.length - 1) return;
+    const label = new Date(times[index]).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    trendChartEl.append(svg("text", { class: "axis", x: x(index), y: height - 10, "text-anchor": "middle" }, label));
+  });
+
+  for (const point of points) {
+    const dot = svg("circle", { class: "dot", cx: x(days.indexOf(point.day)), cy: y(point.amount), r: 3.5 });
+    dot.append(svg("title", {}, (point.item.title || point.item.slug) + " · " + money.format(point.amount)));
+    trendChartEl.append(dot);
+  }
+  trendChartEl.append(svg("polyline", { class: "line", points: medians.map((amount, index) => x(index) + "," + y(amount)).join(" ") }));
+  medians.forEach((amount, index) => {
+    const marker = svg("circle", { class: "median", cx: x(index), cy: y(amount), r: 4.5 });
+    marker.append(svg("title", {}, days[index] + " median · " + money.format(amount)));
+    trendChartEl.append(marker);
+  });
+
+  trendLegendEl.textContent = "Line: median original price per listing date. Dots: each listing. "
+    + points.length + " listings across " + days.length + " day" + (days.length === 1 ? "" : "s") + ".";
 }
 
 function buildCard(item) {
@@ -269,6 +366,7 @@ function buildCard(item) {
 
 function showLoadError() {
   datesEl.textContent = "";
+  trendEl.hidden = true;
   freshListEl.replaceChildren();
   freshEl.hidden = true;
   listEl.replaceChildren();
